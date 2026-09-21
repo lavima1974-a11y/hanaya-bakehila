@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>חנייה בקהילה 🚗</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0; padding: 15px; background-color: #f0f2f5; text-align: right; color: #1c1e21;
+            max-width: 500px; margin-left: auto; margin-right: auto;
+        }
+        h1 { text-align: center; color: #1877f2; margin-top: 10px; font-size: 26px; }
+        .card { 
+            background: white; padding: 16px; border-radius: 12px; margin-bottom: 12px; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08); 
+        }
+        .btn { 
+            border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; 
+            font-size: 15px; font-weight: bold; margin-top: 8px; display: inline-flex; 
+            align-items: center; justify-content: center; gap: 6px; text-decoration: none;
+        }
+        .btn-submit { background-color: #1877f2; color: white; width: 100%; padding: 12px; }
+        .btn-submit:hover { background-color: #166fe5; }
+        .btn-taken { background-color: #e4e6eb; color: #050505; margin-left: 8px; }
+        .btn-taken:hover { background-color: #d8dadf; }
+        .btn-waze { background-color: #33ccff; color: #000; }
+        .btn-waze:hover { background-color: #2bbbe6; }
+        input { 
+            padding: 12px; margin: 8px 0; width: 100%; border: 1px solid #ccd0d5; 
+            border-radius: 8px; font-size: 16px; outline: none;
+        }
+        input:focus { border-color: #1877f2; }
+        .parking-item { border-right: 4px solid #31a24c; }
+        .address-title { font-size: 18px; font-weight: bold; margin-bottom: 4px; }
+        .time-tag { font-size: 13px; color: #65676b; margin-top: 4px; }
+        .actions { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+    </style>
+</head>
+<body>
+
+    <h1>🚗 חנייה בקהילה</h1>
+    
+    <!-- טופס דיווח -->
+    <div class="card">
+        <h3 style="margin-top:0;">📢 דווח על חנייה שמתפנה</h3>
+        <input type="text" id="addressInput" placeholder="רחוב ומספר (למשל: הרצל 15, באר שבע)">
+        <button class="btn btn-submit" onclick="sendParkingReport()">דווח לקהילה</button>
+    </div>
+
+    <!-- רשימת חניות -->
+    <h3>📍 חניות פנויות כרגע:</h3>
+    <div id="parkingList">טוען חניות...</div>
+
+    <!-- חיבור ל-Firebase -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, doc, updateDoc, onSnapshot, serverTimestamp, GeoPoint } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        // הגדרות ה-Firebase המדויקות שלך
+        const firebaseConfig = {
+            apiKey: "AIzaSyC5lAaxtYvXNOZJXL2S8_vsDnz11YC-ADk",
+            authDomain: "hanaya-bakehila.firebaseapp.com",
+            projectId: "hanaya-bakehila",
+            storageBucket: "hanaya-bakehila.firebasestorage.app",
+            messagingSenderId: "557331039456",
+            appId: "1:557331039456:web:0a1d8e49de584f0123c85",
+            measurementId: "G-HZYLTGYF14"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const parkingListDiv = document.getElementById("parkingList");
+
+        // האזנה בזמן אמת לחניות פנויות
+        onSnapshot(collection(db, "parking_reports"), (snapshot) => {
+            parkingListDiv.innerHTML = "";
+            
+            let count = 0;
+            snapshot.forEach((docItem) => {
+                const data = docItem.data();
+                const id = docItem.id;
+
+                if (data.status === "available") {
+                    count++;
+                    const item = document.createElement("div");
+                    item.className = "card parking-item";
+                    
+                    const encodedAddress = encodeURIComponent(data.address || '');
+                    const wazeUrl = `https://waze.com/ul?q=${encodedAddress}&navigate=yes`;
+                    const formattedTime = data.createdAt ? new Date(data.createdAt.seconds * 1000).toLocaleTimeString('he-IL', {hour: '2-digit', minute:'2-digit'}) : 'כרגע';
+
+                    item.innerHTML = `
+                        <div class="address-title">📍 ${data.address || 'לא צוינה כתובת'}</div>
+                        <div class="time-tag">⏱️ פורסם בשעה ${formattedTime}</div>
+                        <div class="actions">
+                            <button class="btn btn-taken" onclick="markAsTaken('${id}')">✅ תפסתי את החנייה!</button>
+                            <a href="${wazeUrl}" target="_blank" class="btn btn-waze">🚙 ניווט ב-Waze</a>
+                        </div>
+                    `;
+                    parkingListDiv.appendChild(item);
+                }
+            });
+
+            if (count === 0) {
+                parkingListDiv.innerHTML = "<div class='card' style='text-align:center;'>אין חניות פנויות כרגע.</div>";
+            }
+        });
+
+        // פונקציית שליחת דיווח
+        window.sendParkingReport = async function() {
+            const addressInput = document.getElementById("addressInput");
+            const address = addressInput.value.trim();
+            
+            if (!address) {
+                alert("נא להזין כתובת!");
+                return;
+            }
+
+            try {
+                await addDoc(collection(db, "parking_reports"), {
+                    address: address,
+                    status: "available",
+                    location: new GeoPoint(31.2518, 34.7913),
+                    createdAt: serverTimestamp(),
+                    reporterId: "web_user"
+                });
+
+                addressInput.value = "";
+            } catch (error) {
+                console.error("שגיאה בשליחת הדיווח:", error);
+                alert("שגיאה בשליחת הדיווח");
+            }
+        };
+
+        // פונקציה לסימון חנייה כתפוסה
+        window.markAsTaken = async function(docId) {
+            try {
+                const docRef = doc(db, "parking_reports", docId);
+                await updateDoc(docRef, {
+                    status: "taken"
+                });
+            } catch (error) {
+                console.error("שגיאה בעדכון הסטטוס:", error);
+                alert("שגיאה בעדכון החנייה");
+            }
+        };
+    </script>
+</body>
+</html>
