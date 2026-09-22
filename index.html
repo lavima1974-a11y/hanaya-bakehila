@@ -1,152 +1,292 @@
 <!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>חנייה בקהילה 🚗</title>
-    <style>
-        * { box-sizing: border-box; }
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            margin: 0; padding: 15px; background-color: #f0f2f5; text-align: right; color: #1c1e21;
-            max-width: 500px; margin-left: auto; margin-right: auto;
-        }
-        h1 { text-align: center; color: #1877f2; margin-top: 10px; font-size: 26px; }
-        .card { 
-            background: white; padding: 16px; border-radius: 12px; margin-bottom: 12px; 
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08); 
-        }
-        .btn { 
-            border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; 
-            font-size: 15px; font-weight: bold; margin-top: 8px; display: inline-flex; 
-            align-items: center; justify-content: center; gap: 6px; text-decoration: none;
-        }
-        .btn-submit { background-color: #1877f2; color: white; width: 100%; padding: 12px; }
-        .btn-submit:hover { background-color: #166fe5; }
-        .btn-taken { background-color: #e4e6eb; color: #050505; margin-left: 8px; }
-        .btn-taken:hover { background-color: #d8dadf; }
-        .btn-waze { background-color: #33ccff; color: #000; }
-        .btn-waze:hover { background-color: #2bbbe6; }
-        input { 
-            padding: 12px; margin: 8px 0; width: 100%; border: 1px solid #ccd0d5; 
-            border-radius: 8px; font-size: 16px; outline: none;
-        }
-        input:focus { border-color: #1877f2; }
-        .parking-item { border-right: 4px solid #31a24c; }
-        .address-title { font-size: 18px; font-weight: bold; margin-bottom: 4px; }
-        .time-tag { font-size: 13px; color: #65676b; margin-top: 4px; }
-        .actions { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
-    </style>
-</head>
-<body>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>חנייה בקהילה 🚗</title>
 
-    <h1>🚗 חנייה בקהילה</h1>
-    
-    <!-- טופס דיווח -->
-    <div class="card">
-        <h3 style="margin-top:0;">📢 דווח על חנייה שמתפנה</h3>
-        <input type="text" id="addressInput" placeholder="רחוב ומספר (למשל: הרצל 15, באר שבע)">
-        <button class="btn btn-submit" onclick="sendParkingReport()">דווח לקהילה</button>
+  <!-- PWA & Mobile Web App Meta Tags -->
+  <meta name="theme-color" content="#2563eb">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="חנייה בקהילה">
+  <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3202/3202052.png">
+  <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/3202/3202052.png">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800 font-sans pb-12">
+
+  <!-- Header -->
+  <header class="bg-blue-600 text-white shadow-md sticky top-0 z-50">
+    <div class="max-w-md mx-auto px-4 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <span class="text-2xl">🚗</span>
+        <h1 class="text-xl font-bold tracking-wide">חנייה בקהילה</h1>
+      </div>
+      <span id="active-count-badge" class="bg-blue-800 text-xs px-2.5 py-1 rounded-full font-medium">0 חניות פנויות</span>
+    </div>
+  </header>
+
+  <main class="max-w-md mx-auto px-4 mt-6 space-y-6">
+
+    <!-- Report Form Card -->
+    <div class="bg-white rounded-2xl shadow-sm p-5 border border-slate-200/80">
+      <h2 class="text-lg font-bold text-slate-800 mb-3 flex items-center gap-2">
+        <span>📢</span> דווחי/דק על חנייה שמתפנה
+      </h2>
+      
+      <form id="parking-form" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">רחוב, מספר ועיר *</label>
+          <input type="text" id="location-input" placeholder="למשל: הרצל 15, באר שבע" required
+            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1">סוג חנייה</label>
+            <select id="type-input" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white">
+              <option value="אפור ⚪">אפור ⚪ (חינם)</option>
+              <option value="כחול-לבן 🔵">כחול-לבן 🔵</option>
+              <option value="חניית נכים ♿">חניית נכים ♿</option>
+              <option value="כללי 🚗">אחר / כללי</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1">תפוגת דיווח</label>
+            <select id="duration-input" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white font-medium text-blue-700">
+              <option value="5">5 דקות ⚡ (אזור עמוס/ת"א)</option>
+              <option value="10" selected>10 דקות ⏱️ (רגיל)</option>
+              <option value="15">15 דקות ⏱️</option>
+              <option value="30">30 דקות ⏳ (אזור שקט)</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">הערה קצרה (אופציונלי)</label>
+          <input type="text" id="notes-input" placeholder="למשל: מתפנה בעוד 2 דק', מתאימה לרכב קטן" 
+            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+        </div>
+
+        <button type="submit" id="submit-btn"
+          class="w-full bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-bold py-3 rounded-xl transition duration-150 shadow-md shadow-blue-500/20 text-sm">
+          דווח לקהילה
+        </button>
+      </form>
     </div>
 
-    <!-- רשימת חניות -->
-    <h3>📍 חניות פנויות כרגע:</h3>
-    <div id="parkingList">טוען חניות...</div>
+    <!-- Active Parkings Header & Search -->
+    <div class="space-y-3">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+          <span>📍</span> חניות פנויות כרגע:
+        </h2>
+        <span class="text-xs text-slate-400">תפוגה אוטומטית לפי הגדרה</span>
+      </div>
 
-    <!-- חיבור ל-Firebase -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, doc, updateDoc, onSnapshot, serverTimestamp, GeoPoint } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+      <!-- Search Input -->
+      <div class="relative">
+        <input type="text" id="search-input" placeholder="סינון לפי שם רחוב..."
+          class="w-full pr-9 pl-3.5 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+        <span class="absolute right-3 top-2.5 text-slate-400 text-xs">🔍</span>
+      </div>
+    </div>
 
-        // הגדרות ה-Firebase המדויקות שלך
-        const firebaseConfig = {
-            apiKey: "AIzaSyC5lAaxtYvXNOZJXL2S8_vsDnz11YC-ADk",
-            authDomain: "hanaya-bakehila.firebaseapp.com",
-            projectId: "hanaya-bakehila",
-            storageBucket: "hanaya-bakehila.firebasestorage.app",
-            messagingSenderId: "557331039456",
-            appId: "1:557331039456:web:0a1d8e49de584f0123c85",
-            measurementId: "G-HZYLTGYF14"
-        };
+    <!-- Parkings List Container -->
+    <div id="parkings-list" class="space-y-3">
+      <!-- Loading State -->
+      <div class="text-center py-8 text-slate-400 text-sm animate-pulse">
+        טוען חניות פנויות...
+      </div>
+    </div>
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
+  </main>
 
-        const parkingListDiv = document.getElementById("parkingList");
+  <!-- Firebase & App Script -->
+  <script>
+    // 1. Firebase Configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyDummyKeyForGithubPagesSetup12345",
+      authDomain: "hanaya-bakehila.firebaseapp.com",
+      projectId: "hanaya-bakehila",
+      storageBucket: "hanaya-bakehila.appspot.com",
+      messagingSenderId: "1234567890",
+      appId: "1:1234567890:web:abcdef123456"
+    };
 
-        // האזנה בזמן אמת לחניות פנויות
-        onSnapshot(collection(db, "parking_reports"), (snapshot) => {
-            parkingListDiv.innerHTML = "";
-            
-            let count = 0;
-            snapshot.forEach((docItem) => {
-                const data = docItem.data();
-                const id = docItem.id;
+    // Initialize Firebase
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    const db = firebase.firestore();
 
-                if (data.status === "available") {
-                    count++;
-                    const item = document.createElement("div");
-                    item.className = "card parking-item";
-                    
-                    const encodedAddress = encodeURIComponent(data.address || '');
-                    const wazeUrl = `https://waze.com/ul?q=${encodedAddress}&navigate=yes`;
-                    const formattedTime = data.createdAt ? new Date(data.createdAt.seconds * 1000).toLocaleTimeString('he-IL', {hour: '2-digit', minute:'2-digit'}) : 'כרגע';
+    // DOM Elements
+    const parkingForm = document.getElementById('parking-form');
+    const locationInput = document.getElementById('location-input');
+    const typeInput = document.getElementById('type-input');
+    const durationInput = document.getElementById('duration-input');
+    const notesInput = document.getElementById('notes-input');
+    const parkingsList = document.getElementById('parkings-list');
+    const searchInput = document.getElementById('search-input');
+    const activeCountBadge = document.getElementById('active-count-badge');
 
-                    item.innerHTML = `
-                        <div class="address-title">📍 ${data.address || 'לא צוינה כתובת'}</div>
-                        <div class="time-tag">⏱️ פורסם בשעה ${formattedTime}</div>
-                        <div class="actions">
-                            <button class="btn btn-taken" onclick="markAsTaken('${id}')">✅ תפסתי את החנייה!</button>
-                            <a href="${wazeUrl}" target="_blank" class="btn btn-waze">🚙 ניווט ב-Waze</a>
-                        </div>
-                    `;
-                    parkingListDiv.appendChild(item);
-                }
-            });
+    let allParkings = [];
 
-            if (count === 0) {
-                parkingListDiv.innerHTML = "<div class='card' style='text-align:center;'>אין חניות פנויות כרגע.</div>";
-            }
+    // Helper: Format Time
+    function formatTime(timestamp) {
+      if (!timestamp) return 'מקודם';
+      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+      return date.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // Helper: Check if parking is expired
+    function isExpired(p) {
+      if (!p.createdAt) return false;
+      const date = p.createdAt.toDate ? p.createdAt.toDate() : new Date(p.createdAt);
+      const diffInMins = (new Date() - date) / (1000 * 60);
+      const maxMins = p.durationMinutes || 10; // Default 10 mins
+      return diffInMins > maxMins;
+    }
+
+    // 2. Submit New Parking
+    parkingForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const location = locationInput.value.trim();
+      const type = typeInput.value;
+      const duration = parseInt(durationInput.value) || 10;
+      const notes = notesInput.value.trim();
+
+      if (!location) return;
+
+      try {
+        await db.collection('parkings').add({
+          location: location,
+          type: type,
+          durationMinutes: duration,
+          notes: notes,
+          status: 'available',
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
-        // פונקציית שליחת דיווח
-        window.sendParkingReport = async function() {
-            const addressInput = document.getElementById("addressInput");
-            const address = addressInput.value.trim();
-            
-            if (!address) {
-                alert("נא להזין כתובת!");
-                return;
-            }
+        locationInput.value = '';
+        notesInput.value = '';
+      } catch (err) {
+        console.error("שגיאה בדיווח:", err);
+        alert("אירעה שגיאה בדיווח, אנא נסו שוב.");
+      }
+    });
 
-            try {
-                await addDoc(collection(db, "parking_reports"), {
-                    address: address,
-                    status: "available",
-                    location: new GeoPoint(31.2518, 34.7913),
-                    createdAt: serverTimestamp(),
-                    reporterId: "web_user"
-                });
+    // 3. Mark as Taken
+    async function markAsTaken(id) {
+      try {
+        await db.collection('parkings').doc(id).update({
+          status: 'taken'
+        });
+      } catch (err) {
+        console.error("שגיאה בעדכון חנייה:", err);
+      }
+    }
 
-                addressInput.value = "";
-            } catch (error) {
-                console.error("שגיאה בשליחת הדיווח:", error);
-                alert("שגיאה בשליחת הדיווח");
-            }
-        };
+    // 4. Delete Parking
+    async function deleteParking(id) {
+      try {
+        await db.collection('parkings').doc(id).delete();
+      } catch (err) {
+        console.error("שגיאה במחיקת חנייה:", err);
+      }
+    }
 
-        // פונקציה לסימון חנייה כתפוסה
-        window.markAsTaken = async function(docId) {
-            try {
-                const docRef = doc(db, "parking_reports", docId);
-                await updateDoc(docRef, {
-                    status: "taken"
-                });
-            } catch (error) {
-                console.error("שגיאה בעדכון הסטטוס:", error);
-                alert("שגיאה בעדכון החנייה");
-            }
-        };
-    </script>
+    // 5. Render Parkings
+    function renderParkings() {
+      const query = searchInput.value.trim().toLowerCase();
+      
+      // Filter out taken, expired and non-matching search
+      const activeParkings = allParkings.filter(p => {
+        const matchesStatus = p.status === 'available';
+        const notExpired = !isExpired(p);
+        const matchesSearch = !query || p.location.toLowerCase().includes(query);
+        return matchesStatus && notExpired && matchesSearch;
+      });
+
+      // Update Badge
+      activeCountBadge.textContent = `${activeParkings.length} חניות פנויות`;
+
+      if (activeParkings.length === 0) {
+        parkingsList.innerHTML = `
+          <div class="bg-white rounded-2xl p-8 text-center border border-slate-200">
+            <div class="text-4xl mb-2">🅿️</div>
+            <p class="font-bold text-slate-700">אין חניות פנויות כרגע</p>
+            <p class="text-xs text-slate-400 mt-1">היו הראשונים לדווח על חנייה שמתפנה ברחוב שלכם!</p>
+          </div>
+        `;
+        return;
+      }
+
+      parkingsList.innerHTML = activeParkings.map(p => {
+        const timeStr = formatTime(p.createdAt);
+        const duration = p.durationMinutes || 10;
+        const wazeUrl = `https://waze.com/ul?q=${encodeURIComponent(p.location)}`;
+
+        return `
+          <div class="bg-white rounded-2xl p-4 shadow-sm border-r-4 border-r-emerald-500 border border-slate-200/80 space-y-3">
+            <div class="flex justify-between items-start">
+              <div>
+                <h3 class="font-bold text-slate-800 text-base flex items-center gap-1.5">
+                  <span>📍</span> ${p.location}
+                </h3>
+                <div class="flex items-center gap-2 mt-1">
+                  <span class="text-xs px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium">${p.type || 'אפור ⚪'}</span>
+                  <span class="text-xs text-slate-400">⏱️ מ- ${timeStr} (תפוגה: ${duration} דק')</span>
+                </div>
+              </div>
+              <button onclick="deleteParking('${p.id}')" title="מחק דיווח" class="text-slate-300 hover:text-red-500 text-xs p-1">
+                🗑️
+              </button>
+            </div>
+
+            ${p.notes ? `<p class="text-xs text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100">💬 ${p.notes}</p>` : ''}
+
+            <div class="flex gap-2 pt-1">
+              <button onclick="markAsTaken('${p.id}')" 
+                class="flex-1 bg-slate-100 hover:bg-emerald-50 text-emerald-700 hover:text-emerald-800 font-semibold py-2 px-3 rounded-xl text-xs transition flex items-center justify-center gap-1 border border-slate-200">
+                ✅ תפסתי את החנייה!
+              </button>
+              <a href="${wazeUrl}" target="_blank"
+                class="bg-sky-500 hover:bg-sky-600 text-white font-semibold py-2 px-3 rounded-xl text-xs transition flex items-center justify-center gap-1 shadow-sm">
+                🚙 ניווט ב-Waze
+              </a>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Search Listener
+    searchInput.addEventListener('input', renderParkings);
+
+    // Refresh expired items periodically every 30 seconds
+    setInterval(renderParkings, 30000);
+
+    // 6. Listen to Firestore Realtime Updates
+    db.collection('parkings')
+      .orderBy('createdAt', 'desc')
+      .onSnapshot((snapshot) => {
+        allParkings = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        renderParkings();
+      }, (error) => {
+        console.error("שגיאה בחיבור ל-Firestore:", error);
+      });
+  </script>
 </body>
 </html>
