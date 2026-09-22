@@ -274,6 +274,10 @@
         const isOnTheWay = p.status === 'on_the_way';
         const remainingHoldSecs = getHoldRemainingSeconds(p);
 
+        // WhatsApp Share Link
+        const shareText = `🚗 *מתפנה חנייה בקהילה!*\n📍 *מיקום:* ${p.location}\n🏷️ *סוג:* ${p.type || 'אפור'}\n${p.notes ? `💬 *הערה:* ${p.notes}\n` : ''}🔗 לפרטים ועדכון: https://lavima1974-a11y.github.io/hanaya-bakehila/`;
+        const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
+
         // Status Card Border Color
         const borderClass = isOnTheWay ? 'border-r-amber-500 bg-amber-50/30' : 'border-r-emerald-500 bg-white';
 
@@ -304,28 +308,39 @@
               </div>
             ` : ''}
 
-            <div class="flex flex-wrap gap-2 pt-1">
-              ${!isOnTheWay ? `
-                <button onclick="markOnTheWay('${p.id}')" 
-                  class="flex-1 bg-amber-500 hover:bg-amber-600 active:scale-[0.98] text-white font-bold py-2.5 px-3 rounded-xl text-xs transition flex items-center justify-center gap-1 shadow-sm">
-                  🏃‍♂️ אני בדרך! (שמור 3 דק')
-                </button>
-              ` : `
-                <button onclick="releaseHold('${p.id}')" 
-                  class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold py-2.5 px-3 rounded-xl text-xs transition">
-                  ↩️ בטל שמירה
-                </button>
-              `}
+            <div class="space-y-2 pt-1">
+              <!-- Actions Row 1 -->
+              <div class="flex gap-2">
+                ${!isOnTheWay ? `
+                  <button onclick="markOnTheWay('${p.id}')" 
+                    class="flex-1 bg-amber-500 hover:bg-amber-600 active:scale-[0.98] text-white font-bold py-2.5 px-2 rounded-xl text-xs transition flex items-center justify-center gap-1 shadow-sm">
+                    🏃‍♂️ אני בדרך! (3 דק')
+                  </button>
+                ` : `
+                  <button onclick="releaseHold('${p.id}')" 
+                    class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold py-2.5 px-3 rounded-xl text-xs transition">
+                    ↩️ בטל שמירה
+                  </button>
+                `}
 
-              <button onclick="markAsTaken('${p.id}')" 
-                class="flex-1 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold py-2.5 px-3 rounded-xl text-xs transition flex items-center justify-center gap-1 shadow-sm">
-                ✅ הגעתי ותפסתי!
-              </button>
+                <button onclick="markAsTaken('${p.id}')" 
+                  class="flex-1 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold py-2.5 px-2 rounded-xl text-xs transition flex items-center justify-center gap-1 shadow-sm">
+                  ✅ תפסתי!
+                </button>
+              </div>
 
-              <a href="${wazeUrl}" target="_blank"
-                class="bg-sky-500 hover:bg-sky-600 text-white font-semibold py-2.5 px-3 rounded-xl text-xs transition flex items-center justify-center gap-1 shadow-sm">
-                🚙 Waze
-              </a>
+              <!-- Actions Row 2 (Waze & WhatsApp) -->
+              <div class="flex gap-2">
+                <a href="${wazeUrl}" target="_blank"
+                  class="flex-1 bg-sky-500 hover:bg-sky-600 text-white font-semibold py-2 px-3 rounded-xl text-xs transition flex items-center justify-center gap-1 shadow-sm">
+                  🚙 Waze
+                </a>
+
+                <a href="${whatsappUrl}" target="_blank"
+                  class="flex-1 bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-3 rounded-xl text-xs transition flex items-center justify-center gap-1 shadow-sm">
+                  💬 שתף בוואטסאפ
+                </a>
+              </div>
             </div>
           </div>
         `;
