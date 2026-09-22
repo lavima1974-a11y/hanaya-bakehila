@@ -48,6 +48,16 @@
             class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
         </div>
 
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">מתי החנייה מתפנה? 🕒</label>
+          <select id="leaving-in-input" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white font-medium text-blue-700">
+            <option value="0" selected>עכשיו! ⚡ (כבר פנויה)</option>
+            <option value="5">בעוד 5 דקות ⏱️</option>
+            <option value="10">בעוד 10 דקות ⏱️</option>
+            <option value="15">בעוד 15 דקות ⏱️</option>
+          </select>
+        </div>
+
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-xs font-semibold text-slate-500 mb-1">סוג חנייה</label>
@@ -60,9 +70,9 @@
           </div>
 
           <div>
-            <label class="block text-xs font-semibold text-slate-500 mb-1">תפוגת דיווח</label>
-            <select id="duration-input" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white font-medium text-blue-700">
-              <option value="5">5 דקות ⚡ (אזור עמוס/ת"א)</option>
+            <label class="block text-xs font-semibold text-slate-500 mb-1">זמן תפוגת דיווח</label>
+            <select id="duration-input" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white">
+              <option value="5">5 דקות ⚡ (אזור עמוס)</option>
               <option value="10" selected>10 דקות ⏱️ (רגיל)</option>
               <option value="15">15 דקות ⏱️</option>
               <option value="30">30 דקות ⏳ (אזור שקט)</option>
@@ -72,7 +82,7 @@
 
         <div>
           <label class="block text-xs font-semibold text-slate-500 mb-1">הערה קצרה (אופציונלי)</label>
-          <input type="text" id="notes-input" placeholder="למשל: מתפנה בעוד 2 דק', מתאימה לרכב קטן" 
+          <input type="text" id="notes-input" placeholder="למשל: מול המכולה, מתאימה לרכב קטן" 
             class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
         </div>
 
@@ -131,6 +141,7 @@
     // DOM Elements
     const parkingForm = document.getElementById('parking-form');
     const locationInput = document.getElementById('location-input');
+    const leavingInInput = document.getElementById('leaving-in-input');
     const typeInput = document.getElementById('type-input');
     const durationInput = document.getElementById('duration-input');
     const notesInput = document.getElementById('notes-input');
@@ -150,10 +161,14 @@
     // Helper: Check if parking is expired
     function isExpired(p) {
       if (!p.createdAt) return false;
-      const date = p.createdAt.toDate ? p.createdAt.toDate() : new Date(p.createdAt);
-      const diffInMins = (new Date() - date) / (1000 * 60);
-      const maxMins = p.durationMinutes || 10;
-      return diffInMins > maxMins;
+      const createdDate = p.createdAt.toDate ? p.createdAt.toDate() : new Date(p.createdAt);
+      const leavingInMins = p.leavingInMinutes || 0;
+      const durationMins = p.durationMinutes || 10;
+      
+      // Expire time is calculated from when it becomes available + duration
+      const totalLifetimeMins = leavingInMins + durationMins;
+      const diffInMins = (new Date() - createdDate) / (1000 * 60);
+      return diffInMins > totalLifetimeMins;
     }
 
     // Helper: Check hold countdown (3 mins max)
@@ -165,10 +180,20 @@
       return remainingSecs > 0 ? remainingSecs : 0;
     }
 
+    // Helper: Calculate seconds until available
+    function getAvailableRemainingSeconds(p) {
+      if (!p.createdAt || !p.leavingInMinutes) return 0;
+      const createdDate = p.createdAt.toDate ? p.createdAt.toDate() : new Date(p.createdAt);
+      const availableDate = new Date(createdDate.getTime() + p.leavingInMinutes * 60000);
+      const diffInSecs = Math.floor((availableDate - new Date()) / 1000);
+      return diffInSecs > 0 ? diffInSecs : 0;
+    }
+
     // 2. Submit New Parking
     parkingForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const location = locationInput.value.trim();
+      const leavingIn = parseInt(leavingInInput.value) || 0;
       const type = typeInput.value;
       const duration = parseInt(durationInput.value) || 10;
       const notes = notesInput.value.trim();
@@ -178,6 +203,7 @@
       try {
         await db.collection('parkings').add({
           location: location,
+          leavingInMinutes: leavingIn,
           type: type,
           durationMinutes: duration,
           notes: notes,
@@ -187,6 +213,7 @@
 
         locationInput.value = '';
         notesInput.value = '';
+        leavingInInput.value = '0';
       } catch (err) {
         console.error("שגיאה בדיווח:", err);
         alert("אירעה שגיאה בדיווח, אנא נסו שוב.");
@@ -273,9 +300,13 @@
         const wazeUrl = `https://waze.com/ul?q=${encodeURIComponent(p.location)}`;
         const isOnTheWay = p.status === 'on_the_way';
         const remainingHoldSecs = getHoldRemainingSeconds(p);
+        const remainingUntilAvailable = getAvailableRemainingSeconds(p);
 
         // WhatsApp Share Link
-        const shareText = `🚗 *מתפנה חנייה בקהילה!*\n📍 *מיקום:* ${p.location}\n🏷️ *סוג:* ${p.type || 'אפור'}\n${p.notes ? `💬 *הערה:* ${p.notes}\n` : ''}🔗 לפרטים ועדכון: https://lavima1974-a11y.github.io/hanaya-bakehila/`;
+        const shareStatus = remainingUntilAvailable > 0 
+          ? `⏳ מתפנה בעוד ${Math.ceil(remainingUntilAvailable / 60)} דקות` 
+          : `🟢 פנויה עכשיו!`;
+        const shareText = `🚗 *דיווח חנייה בקהילה!*\n📍 *מיקום:* ${p.location}\n🕒 *סטטוס:* ${shareStatus}\n🏷️ *סוג:* ${p.type || 'אפור'}\n${p.notes ? `💬 *הערה:* ${p.notes}\n` : ''}🔗 לפרטים ועדכון: https://lavima1974-a11y.github.io/hanaya-bakehila/`;
         const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
 
         // Status Card Border Color
@@ -296,6 +327,19 @@
               <button onclick="deleteParking('${p.id}')" title="מחק דיווח" class="text-slate-300 hover:text-red-500 text-xs p-1">
                 🗑️
               </button>
+            </div>
+
+            <!-- Availability Status Badge -->
+            <div>
+              ${remainingUntilAvailable > 0 ? `
+                <div class="bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-xl px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1.5">
+                  <span>⏳</span> מתפנה בעוד ${Math.floor(remainingUntilAvailable / 60)}:${(remainingUntilAvailable % 60).toString().padStart(2, '0')} דקות
+                </div>
+              ` : `
+                <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl px-3 py-1.5 text-xs font-semibold inline-flex items-center gap-1.5">
+                  <span>🟢</span> פנויה עכשיו!
+                </div>
+              `}
             </div>
 
             ${p.notes ? `<p class="text-xs text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100">💬 ${p.notes}</p>` : ''}
@@ -350,7 +394,7 @@
     // Search Listener
     searchInput.addEventListener('input', renderParkings);
 
-    // Refresh timers every second for countdown
+    // Refresh timers every second for countdowns
     setInterval(renderParkings, 1000);
 
     // 6. Listen to Firestore Realtime Updates
