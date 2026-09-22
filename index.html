@@ -152,8 +152,17 @@
       if (!p.createdAt) return false;
       const date = p.createdAt.toDate ? p.createdAt.toDate() : new Date(p.createdAt);
       const diffInMins = (new Date() - date) / (1000 * 60);
-      const maxMins = p.durationMinutes || 10; // Default 10 mins
+      const maxMins = p.durationMinutes || 10;
       return diffInMins > maxMins;
+    }
+
+    // Helper: Check hold countdown (3 mins max)
+    function getHoldRemainingSeconds(p) {
+      if (p.status !== 'on_the_way' || !p.holdStartedAt) return 0;
+      const date = p.holdStartedAt.toDate ? p.holdStartedAt.toDate() : new Date(p.holdStartedAt);
+      const diffInSecs = Math.floor((new Date() - date) / 1000);
+      const remainingSecs = 180 - diffInSecs; // 3 minutes = 180s
+      return remainingSecs > 0 ? remainingSecs : 0;
     }
 
     // 2. Submit New Parking
@@ -184,7 +193,31 @@
       }
     });
 
-    // 3. Mark as Taken
+    // 3. Set Status: On The Way (Hold for 3 minutes)
+    async function markOnTheWay(id) {
+      try {
+        await db.collection('parkings').doc(id).update({
+          status: 'on_the_way',
+          holdStartedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      } catch (err) {
+        console.error("שגיאה בעדכון 'אני בדרך':", err);
+      }
+    }
+
+    // Cancel Hold / Release back to available
+    async function releaseHold(id) {
+      try {
+        await db.collection('parkings').doc(id).update({
+          status: 'available',
+          holdStartedAt: null
+        });
+      } catch (err) {
+        console.error("שגיאה בביטול שריין:", err);
+      }
+    }
+
+    // Mark as Taken
     async function markAsTaken(id) {
       try {
         await db.collection('parkings').doc(id).update({
@@ -208,15 +241,19 @@
     function renderParkings() {
       const query = searchInput.value.trim().toLowerCase();
       
-      // Filter out taken, expired and non-matching search
       const activeParkings = allParkings.filter(p => {
-        const matchesStatus = p.status === 'available';
+        const notTaken = p.status !== 'taken';
         const notExpired = !isExpired(p);
         const matchesSearch = !query || p.location.toLowerCase().includes(query);
-        return matchesStatus && notExpired && matchesSearch;
+
+        // Check if hold expired automatically
+        if (p.status === 'on_the_way' && getHoldRemainingSeconds(p) <= 0) {
+          releaseHold(p.id);
+        }
+
+        return notTaken && notExpired && matchesSearch;
       });
 
-      // Update Badge
       activeCountBadge.textContent = `${activeParkings.length} חניות פנויות`;
 
       if (activeParkings.length === 0) {
@@ -234,15 +271,20 @@
         const timeStr = formatTime(p.createdAt);
         const duration = p.durationMinutes || 10;
         const wazeUrl = `https://waze.com/ul?q=${encodeURIComponent(p.location)}`;
+        const isOnTheWay = p.status === 'on_the_way';
+        const remainingHoldSecs = getHoldRemainingSeconds(p);
+
+        // Status Card Border Color
+        const borderClass = isOnTheWay ? 'border-r-amber-500 bg-amber-50/30' : 'border-r-emerald-500 bg-white';
 
         return `
-          <div class="bg-white rounded-2xl p-4 shadow-sm border-r-4 border-r-emerald-500 border border-slate-200/80 space-y-3">
+          <div class="${borderClass} rounded-2xl p-4 shadow-sm border-r-4 border border-slate-200/80 space-y-3 transition">
             <div class="flex justify-between items-start">
               <div>
                 <h3 class="font-bold text-slate-800 text-base flex items-center gap-1.5">
                   <span>📍</span> ${p.location}
                 </h3>
-                <div class="flex items-center gap-2 mt-1">
+                <div class="flex items-center gap-2 mt-1 flex-wrap">
                   <span class="text-xs px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium">${p.type || 'אפור ⚪'}</span>
                   <span class="text-xs text-slate-400">⏱️ מ- ${timeStr} (תפוגה: ${duration} דק')</span>
                 </div>
@@ -254,14 +296,35 @@
 
             ${p.notes ? `<p class="text-xs text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100">💬 ${p.notes}</p>` : ''}
 
-            <div class="flex gap-2 pt-1">
+            ${isOnTheWay ? `
+              <!-- On The Way Status Banner -->
+              <div class="bg-amber-100/80 border border-amber-200 rounded-xl p-2.5 flex items-center justify-between text-xs text-amber-900 font-medium">
+                <span>🏃‍♂️ שכן בדרך לחנייה זו!</span>
+                <span class="bg-amber-200 px-2 py-0.5 rounded-md font-bold">שמור עוד ${Math.floor(remainingHoldSecs / 60)}:${(remainingHoldSecs % 60).toString().padStart(2, '0')} דק'</span>
+              </div>
+            ` : ''}
+
+            <div class="flex flex-wrap gap-2 pt-1">
+              ${!isOnTheWay ? `
+                <button onclick="markOnTheWay('${p.id}')" 
+                  class="flex-1 bg-amber-500 hover:bg-amber-600 active:scale-[0.98] text-white font-bold py-2.5 px-3 rounded-xl text-xs transition flex items-center justify-center gap-1 shadow-sm">
+                  🏃‍♂️ אני בדרך! (שמור 3 דק')
+                </button>
+              ` : `
+                <button onclick="releaseHold('${p.id}')" 
+                  class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold py-2.5 px-3 rounded-xl text-xs transition">
+                  ↩️ בטל שמירה
+                </button>
+              `}
+
               <button onclick="markAsTaken('${p.id}')" 
-                class="flex-1 bg-slate-100 hover:bg-emerald-50 text-emerald-700 hover:text-emerald-800 font-semibold py-2 px-3 rounded-xl text-xs transition flex items-center justify-center gap-1 border border-slate-200">
-                ✅ תפסתי את החנייה!
+                class="flex-1 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold py-2.5 px-3 rounded-xl text-xs transition flex items-center justify-center gap-1 shadow-sm">
+                ✅ הגעתי ותפסתי!
               </button>
+
               <a href="${wazeUrl}" target="_blank"
-                class="bg-sky-500 hover:bg-sky-600 text-white font-semibold py-2 px-3 rounded-xl text-xs transition flex items-center justify-center gap-1 shadow-sm">
-                🚙 ניווט ב-Waze
+                class="bg-sky-500 hover:bg-sky-600 text-white font-semibold py-2.5 px-3 rounded-xl text-xs transition flex items-center justify-center gap-1 shadow-sm">
+                🚙 Waze
               </a>
             </div>
           </div>
@@ -272,8 +335,8 @@
     // Search Listener
     searchInput.addEventListener('input', renderParkings);
 
-    // Refresh expired items periodically every 30 seconds
-    setInterval(renderParkings, 30000);
+    // Refresh timers every second for countdown
+    setInterval(renderParkings, 1000);
 
     // 6. Listen to Firestore Realtime Updates
     db.collection('parkings')
