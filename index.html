@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>חנייה בקהילה</title>
+  <title>SpotShare - Global Parking Network</title>
   
   <!-- Leaflet CSS for Maps -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -215,7 +215,7 @@
     }
 
     #map {
-      height: 250px;
+      height: 280px;
       border-radius: 12px;
       margin-bottom: 14px;
       z-index: 1;
@@ -260,6 +260,7 @@
       color: var(--text-muted);
       display: flex;
       gap: 12px;
+      flex-wrap: wrap;
     }
 
     .parking-actions {
@@ -303,7 +304,7 @@
 <body>
 
   <header>
-    <h1>🚗 חנייה בקהילה</h1>
+    <h1>🚗 SpotShare</h1>
     <div class="header-actions">
       <button class="icon-btn" id="soundToggle" title="הפעל/כבה צלילים">🔔</button>
       <button class="icon-btn" id="themeToggle" title="מצב לילה/יום">🌙</button>
@@ -315,20 +316,20 @@
     <!-- Gamification Leaderboard Card -->
     <div class="leaderboard-card">
       <div class="leaderboard-info">
-        <div id="userRank">דרגה: שכן זהב 🌟</div>
-        <div>אלופי הקהילה השבוע: <strong id="reportsCount">0 דיווחים</strong> • צברת <strong id="userPoints">0 נקודות!</strong></div>
+        <div id="userRank">דרגה: אלוף החניות 🌟</div>
+        <div>פעילים ברשת: <strong id="reportsCount">0 דיווחים</strong> • צברת <strong id="userPoints">0 נקודות!</strong></div>
       </div>
       <div class="trophy-badge">🏆</div>
     </div>
 
     <!-- Reporting Form Card -->
     <div class="card">
-      <h2>📣 דווחי/דק על חנייה</h2>
+      <h2>📣 דווח על חנייה חדשה</h2>
       
       <div class="form-group">
-        <label for="address">רחוב, מספר ועיר *</label>
+        <label for="address">רחוב, מספר ויישוב/עיר *</label>
         <div class="location-row">
-          <input type="text" id="address" placeholder="למשל: הרצל 15, באר שבע" required>
+          <input type="text" id="address" placeholder="למשל: דיזנגוף 100, תל אביב" required>
           <button class="btn-secondary" id="locateBtn">📍 מיקום שלי</button>
         </div>
       </div>
@@ -362,10 +363,10 @@
 
       <div class="form-group">
         <label for="note">הערה קצרה (אופציונלי)</label>
-        <input type="text" id="note" placeholder="למשל: מול המכולת, מתאימה לרכב קטן">
+        <input type="text" id="note" placeholder="למשל: ליד הפארק, מתאימה לרכב קטן">
       </div>
 
-      <button class="btn-primary" id="submitBtn">דווח לקהילה</button>
+      <button class="btn-primary" id="submitBtn">פרסם חנייה לציבור</button>
     </div>
 
     <!-- Map & Feed Card -->
@@ -373,9 +374,9 @@
       <h2>🗺️ מפת חניות בזמן אמת</h2>
       <div id="map"></div>
 
-      <h2>📋 חניות פנויות בסביבה (<span id="activeCount">0</span>)</h2>
+      <h2>📋 חניות פנויות ברשת (<span id="activeCount">0</span>)</h2>
       <div id="parkingList">
-        <div style="text-align: center; color: var(--text-muted); padding: 20px;">טוען חניות...</div>
+        <div style="text-align: center; color: var(--text-muted); padding: 20px;">טוען חניות מהענן...</div>
       </div>
     </div>
 
@@ -389,9 +390,9 @@
   <!-- Firebase Scripts -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getFirestore, collection, addDoc, onSnapshot, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    // המפתחות האמיתיים שלך מה-Firebase
+    // המפתחות שלך ל-Firebase
     const firebaseConfig = {
       apiKey: "AIzaSyCA5kWdLD16dzpxjrUTK6YrnXSdUqv1eL8",
       authDomain: "hanaya-family.firebaseapp.com",
@@ -402,37 +403,31 @@
       measurementId: "G-CZ4SQSQ9B1"
     };
 
-    // Initialize Firebase
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // Audio & State
     let soundEnabled = true;
     let points = parseInt(localStorage.getItem('userPoints') || '0');
     let reports = parseInt(localStorage.getItem('userReports') || '0');
 
-    // UI Elements
     const soundBtn = document.getElementById('soundToggle');
     const themeBtn = document.getElementById('themeToggle');
     const pointsEl = document.getElementById('userPoints');
     const reportsEl = document.getElementById('reportsCount');
     const toast = document.getElementById('toast');
 
-    // Update Points Display
     function updateGamification() {
       pointsEl.textContent = `${points} נקודות!`;
       reportsEl.textContent = `${reports} דיווחים`;
     }
     updateGamification();
 
-    // Sound toggle
     soundBtn.addEventListener('click', () => {
       soundEnabled = !soundEnabled;
       soundBtn.textContent = soundEnabled ? '🔔' : '🔕';
       showToast(soundEnabled ? 'צלילים הופעלו' : 'צלילים הושקטו');
     });
 
-    // Dark Mode toggle
     themeBtn.addEventListener('click', () => {
       document.body.classList.toggle('dark-mode');
       const isDark = document.body.classList.contains('dark-mode');
@@ -459,32 +454,30 @@
       osc.stop(ctx.currentTime + 0.3);
     }
 
-    // Leaflet Map Setup (Default to Beer Sheva)
-    const map = L.map('map').setView([31.252, 34.7915], 13);
+    // Leaflet Map Setup (Israel Center default)
+    const map = L.map('map').setView([31.7683, 35.2137], 8);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap'
     }).addTo(map);
 
     let markers = [];
 
-    // Current Location
     document.getElementById('locateBtn').addEventListener('click', () => {
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(pos => {
           const lat = pos.coords.latitude;
           const lng = pos.coords.longitude;
-          map.setView([lat, lng], 16);
+          map.setView([lat, lng], 15);
           document.getElementById('address').value = `מיקום נוכחי (${lat.toFixed(3)}, ${lng.toFixed(3)})`;
           showToast('מיקום זוהה בהצלחה!');
         }, () => showToast('לא ניתן לגשת למיקום הנוכחי'));
       }
     });
 
-    // Submit New Parking Report
     document.getElementById('submitBtn').addEventListener('click', async () => {
       const address = document.getElementById('address').value;
       if (!address) {
-        alert('אנא הזן כתובת או השתמש במיקום הנוכחי');
+        alert('אנא הזן כתובת מלאה או השתמש במיקום הנוכחי');
         return;
       }
 
@@ -501,17 +494,15 @@
       try {
         await addDoc(collection(db, "parkings"), parkingData);
         
-        // Update gamification
-        points += 10;
+        points += 15;
         reports += 1;
         localStorage.setItem('userPoints', points);
         localStorage.setItem('userReports', reports);
         updateGamification();
 
         playSuccessSound();
-        showToast('הדיווח נשלח בהצלחה! +10 נקודות 🏆');
+        showToast('הדיווח פורסם ב-SpotShare! +15 נקודות 🏆');
 
-        // Reset Form
         document.getElementById('address').value = '';
         document.getElementById('note').value = '';
       } catch (e) {
@@ -520,12 +511,10 @@
       }
     });
 
-    // Realtime Listener for Parking Reports
     onSnapshot(collection(db, "parkings"), (snapshot) => {
       const listContainer = document.getElementById('parkingList');
       listContainer.innerHTML = '';
       
-      // Clear Map Markers
       markers.forEach(m => map.removeLayer(m));
       markers = [];
 
@@ -535,19 +524,16 @@
       snapshot.forEach((doc) => {
         const item = doc.data();
         
-        // Filter expired items
         const ageInMinutes = (now - item.timestamp) / (1000 * 60);
         if (ageInMinutes > item.expiresIn) return;
 
         count++;
 
-        // Add Marker
-        const marker = L.marker([31.252 + (Math.random() - 0.5) * 0.02, 34.7915 + (Math.random() - 0.5) * 0.02])
+        const marker = L.marker([31.7683 + (Math.random() - 0.5) * 1.5, 35.2137 + (Math.random() - 0.5) * 1.0])
           .addTo(map)
           .bindPopup(`<b>${item.address}</b><br>${item.availability}`);
         markers.push(marker);
 
-        // Render List Item
         const div = document.createElement('div');
         div.className = 'parking-item';
         
@@ -566,7 +552,7 @@
           </div>
           <div class="parking-actions">
             <a href="https://waze.com/ul?q=${encodeURIComponent(item.address)}&navigate=yes" target="_blank" class="btn-sm btn-waze">🚗 ניווט ב-Waze</a>
-            <button class="btn-sm btn-share" onclick="navigator.share({title:'חנייה פנויה', text:'חנייה פנויה ב-${item.address}!', url: location.href})">📲 שתף חבר</button>
+            <button class="btn-sm btn-share" onclick="navigator.share({title:'SpotShare Parking', text:'חנייה פנויה ב-${item.address}!', url: location.href})">📲 שתף נהגים</button>
           </div>
         `;
         listContainer.appendChild(div);
@@ -574,7 +560,7 @@
 
       document.getElementById('activeCount').textContent = count;
       if (count === 0) {
-        listContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">אין חניות פנויות מדווחות כרגע. קהילה מדווחת - קהילה חונה!</div>';
+        listContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">אין חניות כרגע. היו הראשונים לדווח ב-SpotShare!</div>';
       }
     });
   </script>
